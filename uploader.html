@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>CSV → GitHub Project</title>
+<style>
+body{font-family:Arial, sans-serif;max-width:640px;margin:auto;padding:2rem;}
+label{display:block;margin-top:1rem;}
+input,select,button{width:100%;padding:0.6rem;font-size:1rem;}
+select{cursor:pointer;}
+button[type="button"]{margin-top:0.5rem;}
+progress{width:100%;height:1rem;margin-top:0.5rem;}
+#log{white-space:pre-wrap;background:#f4f4f4;padding:1rem;margin-top:1.5rem;max-height:340px;overflow:auto;}
+small{display:block;margin-top:0.25rem;font-size:0.85em;color:#555;}
+/* Tooltip */
+.tooltip{position:relative;display:inline-block;cursor:help;margin-left:0.25rem;}
+.tooltip .tooltiptext{visibility:hidden;width:270px;background:#333;color:#fff;text-align:left;padding:0.6rem;border-radius:6px;position:absolute;z-index:1;bottom:125%;left:50%;transform:translateX(-50%);opacity:0;transition:opacity .2s;}
+.tooltip:hover .tooltiptext,.tooltip:focus .tooltiptext{visibility:visible;opacity:1;}
+.tooltip .tooltiptext::after{content:"";position:absolute;top:100%;left:50%;margin-left:-5px;border-width:5px;border-style:solid;border-color:#333 transparent transparent transparent;}
+
+/* Navigation */
+.nav-tabs{display:flex;border-bottom:2px solid #ddd;margin-bottom:2rem;}
+.nav-tab{padding:0.75rem 1.5rem;background:#f8f9fa;border:1px solid #ddd;border-bottom:none;cursor:pointer;margin-right:0.25rem;border-radius:6px 6px 0 0;}
+.nav-tab.active{background:#fff;border-bottom:2px solid #fff;margin-bottom:-2px;font-weight:bold;}
+.nav-tab:hover{background:#e9ecef;}
+
+/* Pages */
+.page{display:none;}
+.page.active{display:block;}
+
+/* Task management */
+.task-item{border:1px solid #ddd;padding:1rem;margin:0.5rem 0;border-radius:6px;background:#f8f9fa;}
+.task-item.selected{background:#e3f2fd;border-color:#2196f3;}
+.task-title{font-weight:bold;margin-bottom:0.5rem;}
+.task-body{color:#666;font-size:0.9em;margin-bottom:0.5rem;}
+.task-meta{font-size:0.8em;color:#888;}
+.checkbox-container{display:flex;align-items:flex-start;gap:0.5rem;}
+.bulk-actions{margin:1rem 0;padding:1rem;background:#fff3cd;border:1px solid #ffeaa7;border-radius:6px;}
+.danger-btn{background:#dc3545;color:white;}
+.danger-btn:hover{background:#c82333;}
+</style>
+</head>
+<body>
+<h1>GitHub Project Manager</h1>
+
+<!-- Navigation -->
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="showPage('import')">📤 Importar CSV</div>
+  <div class="nav-tab" onclick="showPage('manage')">📋 Gestionar Tareas</div>
+</div>
+
+<!-- Page 1: Import CSV -->
+<div id="page-import" class="page active">
+  <h2>CSV → GitHub Project</h2>
+
+  <label>Personal Access Token (repo, project):
+    <input id="token" type="password" required>
+    <small>
+      <a href="https://github.com/settings/tokens" target="_blank">¿Dónde consigo mi token?</a>
+      <span class="tooltip" tabindex="0">ℹ️
+        <span class="tooltiptext">En GitHub: avatar → <strong>Settings</strong> → <strong>Developer settings</strong> → <strong>Personal access tokens</strong> → <strong>Tokens <em>(classic)</em></strong> → <em>Generate new token</em>. Marca los scopes <code>repo</code> (para crear Issues) y <code>project</code> (para leer y escribir Projects V2). Copia el token y pégalo aquí.</span>
+      </span>
+      <span class="tooltip" tabindex="0">🔑
+        <span class="tooltiptext"><strong>Permisos necesarios:</strong><br><br>
+        <strong>project</strong> - Lectura y escritura sobre Projects V2 (imprescindible)<br><br>
+        <strong>repo</strong> (ó public_repo) - Creación de Issues en el repositorio<br><br>
+        Con estos permisos el script puede leer Projects, crear Issues y añadirlas al Project seleccionado.</span>
+      </span>
+    </small>
+  </label>
+
+  <label>Owner/Org (vacío = tu usuario del token):
+  <input id="owner" type="text" placeholder="mi_usuario_o_org"></label>
+
+  <label>Lista de Projects V2:
+    <select id="projectSelect" disabled>
+      <option value="">-- Carga la lista --</option>
+    </select>
+    <button type="button" id="loadProjects">Cargar projects</button>
+  </label>
+
+  <label>Repo donde crear las issues:
+  <select id="repo" required disabled>
+    <option value="">-- Carga la lista de repositorios --</option>
+  </select>
+  <button type="button" id="loadRepos">Cargar repositorios</button>
+  <button type="button" id="suggestRepo" style="width:auto;padding:0.25rem 0.5rem;margin-top:0.25rem;">💡 Sugerir desde proyecto</button>
+  <small>Las issues se crearán en este repositorio y luego se agregarán al proyecto seleccionado. Los proyectos V2 pueden contener issues de múltiples repositorios.</small>
+  </label>
+
+  <label>Archivo CSV (title,body):
+  <input id="file" type="file" accept=".csv" required>
+  <small>
+    <span class="tooltip" tabindex="0">📋
+      <span class="tooltiptext"><strong>Formato del CSV:</strong><br><br>
+      <strong>Primera fila:</strong> cabecera (se ignora)<br>
+      <strong>Primera columna:</strong> Título de la issue<br>
+      <strong>Segunda columna:</strong> Descripción (opcional)<br><br>
+      <strong>Ejemplo:</strong><br>
+      title,body<br>
+      Setup project,Basic configuration<br>
+      Add authentication,Login and register screens<br>
+      Database design,"Users, groups, questions"</span>
+    </span>
+    Estructura: primera fila = cabecera, luego título,descripción por fila
+  </small>
+  </label>
+
+  <button id="run">Importar</button>
+
+  <progress id="prog" value="0" max="100" hidden></progress>
+
+  <pre id="log"></pre>
+</div>
+
+<!-- Page 2: Manage Tasks -->
+<div id="page-manage" class="page">
+  <h2>Gestionar Tareas del Proyecto</h2>
+  
+  <div>
+    <label>Proyecto seleccionado:</label>
+    <select id="manageProjectSelect" disabled>
+      <option value="">-- Selecciona un proyecto --</option>
+    </select>
+    <button type="button" id="loadManageProjects">Cargar projects</button>
+    <button type="button" id="loadTasks" disabled>Cargar tareas</button>
+  </div>
+
+  <div id="bulk-actions" class="bulk-actions" style="display:none;">
+    <div><strong>Tareas seleccionadas:</strong> <span id="selectedCount">0</span></div>
+    <button type="button" id="selectAll">Seleccionar todas</button>
+    <button type="button" id="deselectAll">Deseleccionar todas</button>
+    <button type="button" id="deleteSelected" class="danger-btn">🗑️ Eliminar seleccionadas</button>
+  </div>
+
+  <div id="tasksContainer"></div>
+  
+  <pre id="manageLog"></pre>
+</div>
+
+<script>
+let viewerLogin=null; // se llena al cargar projects
+let currentTasks = []; // tareas cargadas
+let selectedTasks = new Set(); // IDs de tareas seleccionadas
+
+function log(msg, isManagePage = false){
+  const el = document.getElementById(isManagePage ? 'manageLog' : 'log');
+  el.textContent += msg + "\n";
+  el.scrollTop = el.scrollHeight;
+}
+
+function showPage(pageId) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+  
+  // Show selected page
+  document.getElementById(`page-${pageId}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const rows = [];
+  let currentRow = [];
+  let currentField = '';
+  let insideQuotes = false;
+  let i = 0;
+  
+  // Skip header row
+  while (i < lines.length) {
+    const line = lines[i];
+    let j = 0;
+    
+    while (j < line.length) {
+      const char = line[j];
+      
+      if (char === '"' && !insideQuotes) {
+        // Start of quoted field
+        insideQuotes = true;
+      } else if (char === '"' && insideQuotes) {
+        // Check if it's escaped quote ("")
+        if (j + 1 < line.length && line[j + 1] === '"') {
+          currentField += '"';
+          j++; // Skip next quote
+        } else {
+          // End of quoted field
+          insideQuotes = false;
+        }
+      } else if (char === ',' && !insideQuotes) {
+        // Field separator
+        currentRow.push(currentField.trim());
+        currentField = '';
+      } else {
+        currentField += char;
+      }
+      j++;
+    }
+    
+    // End of line
+    if (insideQuotes) {
+      // Multi-line field, add line break and continue
+      currentField += '\n';
+    } else {
+      // End of row
+      currentRow.push(currentField.trim());
+      if (currentRow.length > 0 && currentRow[0] !== 'title') { // Skip header
+        rows.push({
+          title: currentRow[0] || '',
+          body: currentRow[1] || ''
+        });
+      }
+      currentRow = [];
+      currentField = '';
+    }
+    
+    i++;
+  }
+  
+  // Handle last row if needed
+  if (currentRow.length > 0) {
+    rows.push({
+      title: currentRow[0] || '',
+      body: currentRow[1] || ''
+    });
+  }
+  
+  return rows.filter(row => row.title.trim() !== '');
+}
+
+async function ghGraphQL(token, query, variables={}){
+  const res=await fetch('https://api.github.com/graphql',{
+    method:'POST',
+    headers:{
+      'Authorization':`Bearer ${token}`,
+      'Content-Type':'application/json',
+      'Accept':'application/vnd.github+json'
+    },
+    body:JSON.stringify({query,variables})
+  });
+  const json=await res.json();
+  if(!res.ok || json.errors){
+    const msg=json.errors?json.errors.map(e=>e.message).join('; '):await res.text();
+    throw new Error(msg);
+  }
+  return json.data;
+}
+
+async function loadProjects(isManagePage = false){
+  const token=document.getElementById('token').value.trim();
+  const owner=document.getElementById('owner').value.trim();
+  if(!token){alert('Introduce el token antes de cargar projects');return;}
+  
+  const btn=document.getElementById(isManagePage ? 'loadManageProjects' : 'loadProjects');
+  const select=document.getElementById(isManagePage ? 'manageProjectSelect' : 'projectSelect');
+  
+  btn.disabled=true; btn.textContent='Cargando…';
+  select.disabled=true;
+  log('Obteniendo lista de Projects…', isManagePage);
+  
+  let query, variables={};
+  if(owner){
+    query=`query($login:String!){
+      viewer{login projectsV2(first:50){nodes{id title number}}}
+      user(login:$login){projectsV2(first:50){nodes{id title number}}}
+      organization(login:$login){projectsV2(first:50){nodes{id title number}}}
+    }`;
+    variables={login:owner};
+  }else{
+    query=`query{ viewer{login projectsV2(first:50){nodes{id title number}}} }`;
+  }
+  
+  try{
+    const data=await ghGraphQL(token, query, variables);
+    viewerLogin=data.viewer.login;
+    const nodes=[...(data.viewer.projectsV2.nodes||[])];
+    if(owner){
+      nodes.push(...(data.user?.projectsV2.nodes||[]));
+      nodes.push(...(data.organization?.projectsV2.nodes||[]));
+    }
+    
+    select.innerHTML='';
+    if(nodes.length===0){
+      select.disabled=true;
+      select.innerHTML='<option value="">-- Sin projects accesibles --</option>';
+      log('No se encontraron Projects V2 accesibles con este token/owner.', isManagePage);
+    }else{
+      nodes.forEach(n=>{
+        const opt=document.createElement('option');
+        opt.value=n.id;
+        opt.textContent=`#${n.number} — ${n.title}`;
+        select.appendChild(opt);
+      });
+      select.disabled=false;
+      log(`Projects cargados: ${nodes.length} (viewer: ${viewerLogin})`, isManagePage);
+      
+      // Habilitar botón "Cargar tareas" en la página de gestión
+      if(isManagePage) {
+        document.getElementById('loadTasks').disabled = false;
+      }
+    }
+  }catch(e){
+    log('Error al cargar projects: '+e.message, isManagePage);
+  }
+  btn.disabled=false; btn.textContent='Cargar projects';
+}
+
+async function loadTasks() {
+  const token = document.getElementById('token').value.trim();
+  const projectId = document.getElementById('manageProjectSelect').value;
+  
+  if (!token || !projectId) {
+    alert('Selecciona un proyecto primero');
+    return;
+  }
+  
+  const btn = document.getElementById('loadTasks');
+  btn.disabled = true;
+  btn.textContent = 'Cargando...';
+  
+  log('Cargando tareas del proyecto...', true);
+  
+  try {
+    const query = `query($projectId: ID!) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          title
+          items(first: 100) {
+            nodes {
+              id
+              content {
+                ... on Issue {
+                  id
+                  number
+                  title
+                  body
+                  url
+                  state
+                  createdAt
+                }
+              }
+            }
+          }
+        }
+      }
+    }`;
+    
+    const data = await ghGraphQL(token, query, { projectId });
+    const project = data.node;
+    const items = project.items.nodes.filter(item => item.content && item.content.title);
+    
+    currentTasks = items;
+    selectedTasks.clear();
+    
+    renderTasks(items);
+    log(`Cargadas ${items.length} tareas del proyecto "${project.title}"`, true);
+    
+  } catch (e) {
+    log('Error al cargar tareas: ' + e.message, true);
+  }
+  
+  btn.disabled = false;
+  btn.textContent = 'Cargar tareas';
+}
+
+function renderTasks(tasks) {
+  const container = document.getElementById('tasksContainer');
+  const bulkActions = document.getElementById('bulk-actions');
+  
+  if (tasks.length === 0) {
+    container.innerHTML = '<p>No hay tareas en este proyecto.</p>';
+    bulkActions.style.display = 'none';
+    return;
+  }
+  
+  bulkActions.style.display = 'block';
+  updateSelectedCount();
+  
+  container.innerHTML = tasks.map(task => {
+    const issue = task.content;
+    const isSelected = selectedTasks.has(task.id);
+    
+    return `
+      <div class="task-item ${isSelected ? 'selected' : ''}" data-task-id="${task.id}">
+        <div class="checkbox-container">
+          <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleTaskSelection('${task.id}')">
+          <div style="flex: 1;">
+            <div class="task-title">#${issue.number} ${issue.title}</div>
+            <div class="task-body">${issue.body ? issue.body.substring(0, 200) + (issue.body.length > 200 ? '...' : '') : ''}</div>
+            <div class="task-meta">
+              Estado: ${issue.state} | Creado: ${new Date(issue.createdAt).toLocaleDateString()}
+              <a href="${issue.url}" target="_blank">Ver en GitHub</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleTaskSelection(taskId) {
+  if (selectedTasks.has(taskId)) {
+    selectedTasks.delete(taskId);
+  } else {
+    selectedTasks.add(taskId);
+  }
+  
+  const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+  taskElement.classList.toggle('selected', selectedTasks.has(taskId));
+  
+  updateSelectedCount();
+}
+
+function updateSelectedCount() {
+  document.getElementById('selectedCount').textContent = selectedTasks.size;
+}
+
+function selectAllTasks() {
+  currentTasks.forEach(task => selectedTasks.add(task.id));
+  renderTasks(currentTasks);
+}
+
+function deselectAllTasks() {
+  selectedTasks.clear();
+  renderTasks(currentTasks);
+}
+
+async function deleteSelectedTasks() {
+  if (selectedTasks.size === 0) {
+    alert('No hay tareas seleccionadas');
+    return;
+  }
+  
+  if (!confirm(`¿Estás seguro de eliminar ${selectedTasks.size} tarea(s)?`)) {
+    return;
+  }
+  
+  const token = document.getElementById('token').value.trim();
+  const btn = document.getElementById('deleteSelected');
+  btn.disabled = true;
+  btn.textContent = 'Eliminando...';
+  
+  let deleted = 0;
+  let errors = 0;
+  
+  for (const taskId of selectedTasks) {
+    try {
+      const task = currentTasks.find(t => t.id === taskId);
+      const issueId = task.content.id;
+      
+      // Primero eliminar del proyecto
+      const removeQuery = `mutation($projectId: ID!, $itemId: ID!) {
+        deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
+          deletedItemId
+        }
+      }`;
+      
+      const projectId = document.getElementById('manageProjectSelect').value;
+      await ghGraphQL(token, removeQuery, { projectId, itemId: taskId });
+      
+      log(`✓ Tarea #${task.content.number} eliminada del proyecto`, true);
+      deleted++;
+      
+    } catch (e) {
+      log(`✗ Error eliminando tarea: ${e.message}`, true);
+      errors++;
+    }
+  }
+  
+  log(`Proceso completado: ${deleted} eliminadas, ${errors} errores`, true);
+  
+  // Recargar tareas
+  selectedTasks.clear();
+  await loadTasks();
+  
+  btn.disabled = false;
+  btn.textContent = '🗑️ Eliminar seleccionadas';
+}
+
+async function crearIssue(token,owner,repo,row){
+  const res=await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`,{
+    method:'POST',
+    headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json'},
+    body:JSON.stringify({title:row.title, body:row.body})
+  });
+  if(!res.ok){
+    const err=await res.text();
+    throw new Error(err);
+  }
+  return (await res.json()).node_id;
+}
+
+async function addToProject(token,projectId,contentId){
+  const mutation=`mutation($project:ID!,$content:ID!){ addProjectV2ItemById(input:{projectId:$project,contentId:$content}){ item{id} } }`;
+  await ghGraphQL(token, mutation,{project:projectId, content:contentId});
+}
+
+async function suggestRepo() {
+  const token = document.getElementById('token').value.trim();
+  const projectId = document.getElementById('projectSelect').value;
+  
+  if (!token || !projectId) {
+    alert('Primero selecciona un proyecto');
+    return;
+  }
+  
+  const btn = document.getElementById('suggestRepo');
+  btn.disabled = true;
+  btn.textContent = '🔄 Analizando...';
+  
+  try {
+    const query = `query($projectId: ID!) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          title
+          items(first: 20) {
+            nodes {
+              content {
+                ... on Issue {
+                  repository {
+                    owner {
+                      login
+                    }
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }`;
+    
+    const data = await ghGraphQL(token, query, { projectId });
+    const items = data.node.items.nodes;
+    
+    // Contar repositorios más frecuentes
+    const repoCount = {};
+    items.forEach(item => {
+      if (item.content && item.content.repository) {
+        const repo = item.content.repository;
+        const fullName = `${repo.owner.login}/${repo.name}`;
+        repoCount[fullName] = (repoCount[fullName] || 0) + 1;
+      }
+    });
+    
+    if (Object.keys(repoCount).length === 0) {
+      alert('Este proyecto no tiene issues existentes para sugerir un repositorio.');
+      return;
+    }
+    
+    // Encontrar el repositorio más usado
+    const sortedRepos = Object.entries(repoCount)
+      .sort(([,a], [,b]) => b - a);
+    
+    let message = 'Repositorios encontrados en este proyecto:\n\n';
+    sortedRepos.forEach(([repo, count], index) => {
+      message += `${index + 1}. ${repo} (${count} issues)\n`;
+    });
+    
+    const choice = prompt(message + '\n¿Qué repositorio quieres usar? (escribe el número):');
+    const index = parseInt(choice) - 1;
+    
+    if (index >= 0 && index < sortedRepos.length) {
+      const [ownerRepo] = sortedRepos[index];
+      const repoName = ownerRepo.split('/')[1];
+      
+      // Verificar si el repo está en el dropdown, si no, agregarlo
+      const select = document.getElementById('repo');
+      let optionExists = false;
+      
+      for (let option of select.options) {
+        if (option.value === repoName) {
+          select.value = repoName;
+          optionExists = true;
+          break;
+        }
+      }
+      
+      if (!optionExists) {
+        // Agregar el repositorio sugerido al dropdown
+        const newOption = document.createElement('option');
+        newOption.value = repoName;
+        newOption.textContent = `${repoName} (sugerido desde proyecto)`;
+        newOption.selected = true;
+        select.appendChild(newOption);
+        select.disabled = false;
+      }
+      
+      log(`✅ Repositorio sugerido: ${repoName}`);
+    }
+    
+  } catch (e) {
+    log('Error al sugerir repositorio: ' + e.message);
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '💡 Sugerir desde proyecto';
+}
+
+async function loadRepos() {
+  const token = document.getElementById('token').value.trim();
+  const owner = document.getElementById('owner').value.trim() || viewerLogin;
+  
+  if (!token) {
+    alert('Introduce el token primero');
+    return;
+  }
+  
+  if (!owner) {
+    alert('Especifica el owner o carga los proyectos primero para obtener tu usuario');
+    return;
+  }
+  
+  const btn = document.getElementById('loadRepos');
+  const select = document.getElementById('repo');
+  
+  btn.disabled = true;
+  btn.textContent = 'Cargando...';
+  select.disabled = true;
+  
+  log('Cargando repositorios de ' + owner + '...');
+  
+  try {
+    // Intentar primero como usuario
+    let query = `query($owner: String!) {
+      user(login: $owner) {
+        repositories(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
+          nodes {
+            name
+            owner {
+              login
+            }
+            isPrivate
+            hasIssuesEnabled
+            updatedAt
+            description
+          }
+        }
+      }
+    }`;
+    
+    let data;
+    try {
+      data = await ghGraphQL(token, query, { owner });
+      if (!data.user) throw new Error('Not a user');
+    } catch (userError) {
+      // Intentar como organización
+      query = `query($owner: String!) {
+        organization(login: $owner) {
+          repositories(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
+            nodes {
+              name
+              owner {
+                login
+              }
+              isPrivate
+              hasIssuesEnabled
+              updatedAt
+              description
+            }
+          }
+        }
+      }`;
+      
+      data = await ghGraphQL(token, query, { owner });
+      if (!data.organization) {
+        throw new Error('Usuario/organización no encontrado');
+      }
+    }
+    
+    const repos = data.user?.repositories?.nodes || data.organization?.repositories?.nodes || [];
+    
+    // Filtrar solo repos con issues habilitadas
+    const reposWithIssues = repos.filter(repo => repo.hasIssuesEnabled);
+    
+    select.innerHTML = '';
+    if (reposWithIssues.length === 0) {
+      select.innerHTML = '<option value="">-- No hay repositorios con issues --</option>';
+      log('No se encontraron repositorios con issues habilitadas.');
+    } else {
+      reposWithIssues.forEach(repo => {
+        const option = document.createElement('option');
+        option.value = repo.name;
+        option.textContent = `${repo.name}${repo.isPrivate ? ' 🔒' : ' 🌐'} - ${repo.description || 'Sin descripción'}`;
+        select.appendChild(option);
+      });
+      select.disabled = false;
+      log(`Repositorios cargados: ${reposWithIssues.length} (con issues habilitadas)`);
+    }
+    
+  } catch (e) {
+    log('Error al cargar repositorios: ' + e.message);
+    select.innerHTML = '<option value="">-- Error al cargar --</option>';
+  }
+  
+  btn.disabled = false;
+  btn.textContent = 'Cargar repositorios';
+}
+
+// Event Listeners
+document.getElementById('loadProjects').addEventListener('click', () => loadProjects(false));
+document.getElementById('loadManageProjects').addEventListener('click', () => loadProjects(true));
+document.getElementById('loadTasks').addEventListener('click', loadTasks);
+document.getElementById('selectAll').addEventListener('click', selectAllTasks);
+document.getElementById('deselectAll').addEventListener('click', deselectAllTasks);
+document.getElementById('deleteSelected').addEventListener('click', deleteSelectedTasks);
+document.getElementById('loadRepos').addEventListener('click', loadRepos);
+document.getElementById('suggestRepo').addEventListener('click', suggestRepo);
+
+document.getElementById('run').addEventListener('click',async ()=>{
+  const token=document.getElementById('token').value.trim();
+  const ownerInput=document.getElementById('owner').value.trim();
+  const ownerName=ownerInput||viewerLogin;
+  const repo=document.getElementById('repo').value.trim();
+  const projectId=document.getElementById('projectSelect').value;
+  const file=document.getElementById('file').files[0];
+  if(!token||!repo||!projectId||!file||!ownerName){alert('Faltan datos o no se reconoció el owner');return;}
+  const prog=document.getElementById('prog');
+  prog.hidden=false; prog.value=0;
+  document.getElementById('log').textContent='';
+
+  const text=await file.text();
+  const rows=parseCSV(text);
+  const total=rows.length;
+  log(`Filas encontradas: ${total}\n---`);
+  let done=0;
+  for(const row of rows){
+    try{
+      log(`Creando issue: \"${row.title}\"…`);
+      const nodeId=await crearIssue(token,ownerName,repo,row);
+      log('   ✓ Issue creado, añadiendo al Project…');
+      await addToProject(token,projectId,nodeId);
+      log('   ✓ Añadido');
+    }catch(e){
+      log('   ✗ Error: '+e.message);
+    }
+    done++; prog.value=Math.round((done/total)*100);
+  }
+  log('---\nProceso completado.');
+});
+</script>
+</body>
+</html>
