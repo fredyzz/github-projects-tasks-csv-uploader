@@ -1,17 +1,23 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>CSV → GitHub Project</title>
 <style>
 body{font-family:Arial, sans-serif;max-width:640px;margin:auto;padding:2rem;}
 label{display:block;margin-top:1rem;}
-input,select,button{width:100%;padding:0.6rem;font-size:1rem;}
+input,select,button{width:100%;padding:0.6rem;font-size:1rem;border:1px solid #ddd;border-radius:4px;}
 select{cursor:pointer;}
+button{background:#f8f9fa;color:#333;cursor:pointer;transition:background-color 0.2s;}
+button:hover:not(:disabled){background:#e9ecef;}
+button:disabled{background:#f8f9fa;color:#6c757d;cursor:not-allowed;}
 button[type="button"]{margin-top:0.5rem;}
 progress{width:100%;height:1rem;margin-top:0.5rem;}
-#log{white-space:pre-wrap;background:#f4f4f4;padding:1rem;margin-top:1.5rem;max-height:340px;overflow:auto;}
+#log{white-space:pre-wrap;background:#f8f9fa;padding:1rem;margin-top:1.5rem;max-height:340px;overflow:auto;border:1px solid #ddd;border-radius:4px;}
 small{display:block;margin-top:0.25rem;font-size:0.85em;color:#555;}
+h1{color:#333;margin-bottom:1.5rem;}
+h2{color:#495057;margin-bottom:1rem;font-size:1.3rem;}
+
 /* Tooltip */
 .tooltip{position:relative;display:inline-block;cursor:help;margin-left:0.25rem;}
 .tooltip .tooltiptext{visibility:hidden;width:270px;background:#333;color:#fff;text-align:left;padding:0.6rem;border-radius:6px;position:absolute;z-index:1;bottom:125%;left:50%;transform:translateX(-50%);opacity:0;transition:opacity .2s;}
@@ -19,9 +25,9 @@ small{display:block;margin-top:0.25rem;font-size:0.85em;color:#555;}
 .tooltip .tooltiptext::after{content:"";position:absolute;top:100%;left:50%;margin-left:-5px;border-width:5px;border-style:solid;border-color:#333 transparent transparent transparent;}
 
 /* Navigation */
-.nav-tabs{display:flex;border-bottom:2px solid #ddd;margin-bottom:2rem;}
-.nav-tab{padding:0.75rem 1.5rem;background:#f8f9fa;border:1px solid #ddd;border-bottom:none;cursor:pointer;margin-right:0.25rem;border-radius:6px 6px 0 0;}
-.nav-tab.active{background:#fff;border-bottom:2px solid #fff;margin-bottom:-2px;font-weight:bold;}
+.nav-tabs{display:flex;border-bottom:2px solid #ddd;margin:2rem 0 1.5rem 0;}
+.nav-tab{padding:0.75rem 1.5rem;background:#f8f9fa;border:1px solid #ddd;border-bottom:none;cursor:pointer;margin-right:0.25rem;border-radius:6px 6px 0 0;transition:background-color 0.2s;}
+.nav-tab.active{background:#fff;border-bottom:2px solid #fff;margin-bottom:-2px;font-weight:bold;color:#007bff;}
 .nav-tab:hover{background:#e9ecef;}
 
 /* Pages */
@@ -43,70 +49,73 @@ small{display:block;margin-top:0.25rem;font-size:0.85em;color:#555;}
 <body>
 <h1>GitHub Project Manager</h1>
 
+<!-- Shared Token Field -->
+<label>Personal Access Token (repo, project):
+  <input id="token" type="password" required>
+  <small>
+    <a href="https://github.com/settings/tokens" target="_blank">Where do I get my token?</a>
+    <span class="tooltip" tabindex="0">ℹ️
+      <span class="tooltiptext">
+        <strong>How to create your token:</strong><br>
+        1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)<br>
+        2. Click "Generate new token"<br>
+        3. Select these scopes:<br>
+        &nbsp;&nbsp;• <strong>repo</strong> - to create issues<br>
+        &nbsp;&nbsp;• <strong>project</strong> - to manage Projects V2<br>
+        4. Copy the token and paste it here<br><br>
+        <strong>Note:</strong> For public repos only, you can use <code>public_repo</code> instead of <code>repo</code>
+      </span>
+    </span>
+  </small>
+</label>
+
 <!-- Navigation -->
 <div class="nav-tabs">
-  <div class="nav-tab active" onclick="showPage('import')">📤 Importar CSV</div>
-  <div class="nav-tab" onclick="showPage('manage')">📋 Gestionar Tareas</div>
+  <div class="nav-tab active" onclick="showPage('import')">📤 Import CSV</div>
+  <div class="nav-tab" onclick="showPage('manage')">📋 Manage Tasks</div>
 </div>
 
 <!-- Page 1: Import CSV -->
 <div id="page-import" class="page active">
   <h2>CSV → GitHub Project</h2>
 
-  <label>Personal Access Token (repo, project):
-    <input id="token" type="password" required>
-    <small>
-      <a href="https://github.com/settings/tokens" target="_blank">¿Dónde consigo mi token?</a>
-      <span class="tooltip" tabindex="0">ℹ️
-        <span class="tooltiptext">En GitHub: avatar → <strong>Settings</strong> → <strong>Developer settings</strong> → <strong>Personal access tokens</strong> → <strong>Tokens <em>(classic)</em></strong> → <em>Generate new token</em>. Marca los scopes <code>repo</code> (para crear Issues) y <code>project</code> (para leer y escribir Projects V2). Copia el token y pégalo aquí.</span>
-      </span>
-      <span class="tooltip" tabindex="0">🔑
-        <span class="tooltiptext"><strong>Permisos necesarios:</strong><br><br>
-        <strong>project</strong> - Lectura y escritura sobre Projects V2 (imprescindible)<br><br>
-        <strong>repo</strong> (ó public_repo) - Creación de Issues en el repositorio<br><br>
-        Con estos permisos el script puede leer Projects, crear Issues y añadirlas al Project seleccionado.</span>
-      </span>
-    </small>
-  </label>
+  <label>Owner/Org (empty = your token user):
+  <input id="owner" type="text" placeholder="my_username_or_org"></label>
 
-  <label>Owner/Org (vacío = tu usuario del token):
-  <input id="owner" type="text" placeholder="mi_usuario_o_org"></label>
-
-  <label>Lista de Projects V2:
+  <label>Projects V2 list:
     <select id="projectSelect" disabled>
-      <option value="">-- Carga la lista --</option>
+      <option value="">-- Load the list --</option>
     </select>
-    <button type="button" id="loadProjects">Cargar projects</button>
+    <button type="button" id="loadProjects" disabled>Enter token first</button>
   </label>
 
-  <label>Repo donde crear las issues:
+  <label>Repository to create issues in:
   <select id="repo" required disabled>
-    <option value="">-- Carga la lista de repositorios --</option>
+    <option value="">-- Load repository list --</option>
   </select>
-  <button type="button" id="loadRepos">Cargar repositorios</button>
-  <button type="button" id="suggestRepo" style="width:auto;padding:0.25rem 0.5rem;margin-top:0.25rem;">💡 Sugerir desde proyecto</button>
-  <small>Las issues se crearán en este repositorio y luego se agregarán al proyecto seleccionado. Los proyectos V2 pueden contener issues de múltiples repositorios.</small>
+  <button type="button" id="loadRepos" disabled>Enter token first</button>
+  <small>Issues will be created in this repository and then added to the selected project. Projects V2 can contain issues from multiple repositories.</small>
   </label>
 
-  <label>Archivo CSV (title,body):
+  <label>CSV file (title,body):
   <input id="file" type="file" accept=".csv" required>
   <small>
     <span class="tooltip" tabindex="0">📋
-      <span class="tooltiptext"><strong>Formato del CSV:</strong><br><br>
-      <strong>Primera fila:</strong> cabecera (se ignora)<br>
-      <strong>Primera columna:</strong> Título de la issue<br>
-      <strong>Segunda columna:</strong> Descripción (opcional)<br><br>
-      <strong>Ejemplo:</strong><br>
+      <span class="tooltiptext"><strong>CSV format:</strong><br><br>
+      <strong>First row:</strong> header (ignored)<br>
+      <strong>First column:</strong> Issue title<br>
+      <strong>Second column:</strong> Description (optional)<br><br>
+      <strong>Example:</strong><br>
       title,body<br>
       Setup project,Basic configuration<br>
       Add authentication,Login and register screens<br>
       Database design,"Users, groups, questions"</span>
     </span>
-    Estructura: primera fila = cabecera, luego título,descripción por fila
+    Structure: first row = header, then title,description per row
   </small>
   </label>
 
-  <button id="run">Importar</button>
+  <button id="run" disabled>Import</button>
 
   <progress id="prog" value="0" max="100" hidden></progress>
 
@@ -115,22 +124,22 @@ small{display:block;margin-top:0.25rem;font-size:0.85em;color:#555;}
 
 <!-- Page 2: Manage Tasks -->
 <div id="page-manage" class="page">
-  <h2>Gestionar Tareas del Proyecto</h2>
+  <h2>Manage Project Tasks</h2>
   
   <div>
-    <label>Proyecto seleccionado:</label>
+    <label>Selected project:</label>
     <select id="manageProjectSelect" disabled>
-      <option value="">-- Selecciona un proyecto --</option>
+      <option value="">-- Select a project --</option>
     </select>
-    <button type="button" id="loadManageProjects">Cargar projects</button>
-    <button type="button" id="loadTasks" disabled>Cargar tareas</button>
+    <button type="button" id="loadManageProjects" disabled>Enter token first</button>
+    <button type="button" id="loadTasks" disabled>Load tasks</button>
   </div>
 
   <div id="bulk-actions" class="bulk-actions" style="display:none;">
-    <div><strong>Tareas seleccionadas:</strong> <span id="selectedCount">0</span></div>
-    <button type="button" id="selectAll">Seleccionar todas</button>
-    <button type="button" id="deselectAll">Deseleccionar todas</button>
-    <button type="button" id="deleteSelected" class="danger-btn">🗑️ Eliminar seleccionadas</button>
+    <div><strong>Selected tasks:</strong> <span id="selectedCount">0</span></div>
+    <button type="button" id="selectAll">Select all</button>
+    <button type="button" id="deselectAll">Deselect all</button>
+    <button type="button" id="deleteSelected" class="danger-btn">🗑️ Delete selected</button>
   </div>
 
   <div id="tasksContainer"></div>
@@ -139,9 +148,9 @@ small{display:block;margin-top:0.25rem;font-size:0.85em;color:#555;}
 </div>
 
 <script>
-let viewerLogin=null; // se llena al cargar projects
-let currentTasks = []; // tareas cargadas
-let selectedTasks = new Set(); // IDs de tareas seleccionadas
+let viewerLogin=null; // filled when loading projects
+let currentTasks = []; // loaded tasks
+let selectedTasks = new Set(); // selected task IDs
 
 function log(msg, isManagePage = false){
   const el = document.getElementById(isManagePage ? 'manageLog' : 'log');
@@ -249,14 +258,14 @@ async function ghGraphQL(token, query, variables={}){
 async function loadProjects(isManagePage = false){
   const token=document.getElementById('token').value.trim();
   const owner=document.getElementById('owner').value.trim();
-  if(!token){alert('Introduce el token antes de cargar projects');return;}
+  if(!token){alert('Enter the token before loading projects');return;}
   
   const btn=document.getElementById(isManagePage ? 'loadManageProjects' : 'loadProjects');
   const select=document.getElementById(isManagePage ? 'manageProjectSelect' : 'projectSelect');
   
-  btn.disabled=true; btn.textContent='Cargando…';
+  btn.disabled=true; btn.textContent='Loading…';
   select.disabled=true;
-  log('Obteniendo lista de Projects…', isManagePage);
+  log('Getting Projects list…', isManagePage);
   
   let query, variables={};
   if(owner){
@@ -282,8 +291,8 @@ async function loadProjects(isManagePage = false){
     select.innerHTML='';
     if(nodes.length===0){
       select.disabled=true;
-      select.innerHTML='<option value="">-- Sin projects accesibles --</option>';
-      log('No se encontraron Projects V2 accesibles con este token/owner.', isManagePage);
+      select.innerHTML='<option value="">-- No accessible projects --</option>';
+      log('No accessible Projects V2 found with this token/owner.', isManagePage);
     }else{
       nodes.forEach(n=>{
         const opt=document.createElement('option');
@@ -292,17 +301,17 @@ async function loadProjects(isManagePage = false){
         select.appendChild(opt);
       });
       select.disabled=false;
-      log(`Projects cargados: ${nodes.length} (viewer: ${viewerLogin})`, isManagePage);
+      log(`Projects loaded: ${nodes.length} (viewer: ${viewerLogin})`, isManagePage);
       
-      // Habilitar botón "Cargar tareas" en la página de gestión
+      // Enable "Load tasks" button on management page
       if(isManagePage) {
         document.getElementById('loadTasks').disabled = false;
       }
     }
   }catch(e){
-    log('Error al cargar projects: '+e.message, isManagePage);
+    log('Error loading projects: '+e.message, isManagePage);
   }
-  btn.disabled=false; btn.textContent='Cargar projects';
+  btn.disabled=false; btn.textContent='Load projects';
 }
 
 async function loadTasks() {
@@ -310,15 +319,15 @@ async function loadTasks() {
   const projectId = document.getElementById('manageProjectSelect').value;
   
   if (!token || !projectId) {
-    alert('Selecciona un proyecto primero');
+    alert('Select a project first');
     return;
   }
   
   const btn = document.getElementById('loadTasks');
   btn.disabled = true;
-  btn.textContent = 'Cargando...';
+  btn.textContent = 'Loading...';
   
-  log('Cargando tareas del proyecto...', true);
+  log('Loading project tasks...', true);
   
   try {
     const query = `query($projectId: ID!) {
@@ -353,14 +362,14 @@ async function loadTasks() {
     selectedTasks.clear();
     
     renderTasks(items);
-    log(`Cargadas ${items.length} tareas del proyecto "${project.title}"`, true);
+    log(`Loaded ${items.length} tasks from project "${project.title}"`, true);
     
   } catch (e) {
-    log('Error al cargar tareas: ' + e.message, true);
+    log('Error loading tasks: ' + e.message, true);
   }
   
   btn.disabled = false;
-  btn.textContent = 'Cargar tareas';
+  btn.textContent = 'Load tasks';
 }
 
 function renderTasks(tasks) {
@@ -368,7 +377,7 @@ function renderTasks(tasks) {
   const bulkActions = document.getElementById('bulk-actions');
   
   if (tasks.length === 0) {
-    container.innerHTML = '<p>No hay tareas en este proyecto.</p>';
+    container.innerHTML = '<p>No tasks in this project.</p>';
     bulkActions.style.display = 'none';
     return;
   }
@@ -388,8 +397,8 @@ function renderTasks(tasks) {
             <div class="task-title">#${issue.number} ${issue.title}</div>
             <div class="task-body">${issue.body ? issue.body.substring(0, 200) + (issue.body.length > 200 ? '...' : '') : ''}</div>
             <div class="task-meta">
-              Estado: ${issue.state} | Creado: ${new Date(issue.createdAt).toLocaleDateString()}
-              <a href="${issue.url}" target="_blank">Ver en GitHub</a>
+              State: ${issue.state} | Created: ${new Date(issue.createdAt).toLocaleDateString()}
+              <a href="${issue.url}" target="_blank">View on GitHub</a>
             </div>
           </div>
         </div>
@@ -427,18 +436,18 @@ function deselectAllTasks() {
 
 async function deleteSelectedTasks() {
   if (selectedTasks.size === 0) {
-    alert('No hay tareas seleccionadas');
+    alert('No tasks selected');
     return;
   }
   
-  if (!confirm(`¿Estás seguro de eliminar ${selectedTasks.size} tarea(s)?`)) {
+  if (!confirm(`Are you sure you want to delete ${selectedTasks.size} task(s)?`)) {
     return;
   }
   
   const token = document.getElementById('token').value.trim();
   const btn = document.getElementById('deleteSelected');
   btn.disabled = true;
-  btn.textContent = 'Eliminando...';
+  btn.textContent = 'Deleting...';
   
   let deleted = 0;
   let errors = 0;
@@ -448,7 +457,7 @@ async function deleteSelectedTasks() {
       const task = currentTasks.find(t => t.id === taskId);
       const issueId = task.content.id;
       
-      // Primero eliminar del proyecto
+      // First remove from project
       const removeQuery = `mutation($projectId: ID!, $itemId: ID!) {
         deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
           deletedItemId
@@ -458,26 +467,26 @@ async function deleteSelectedTasks() {
       const projectId = document.getElementById('manageProjectSelect').value;
       await ghGraphQL(token, removeQuery, { projectId, itemId: taskId });
       
-      log(`✓ Tarea #${task.content.number} eliminada del proyecto`, true);
+      log(`✓ Task #${task.content.number} removed from project`, true);
       deleted++;
       
     } catch (e) {
-      log(`✗ Error eliminando tarea: ${e.message}`, true);
+      log(`✗ Error deleting task: ${e.message}`, true);
       errors++;
     }
   }
   
-  log(`Proceso completado: ${deleted} eliminadas, ${errors} errores`, true);
+  log(`Process completed: ${deleted} deleted, ${errors} errors`, true);
   
-  // Recargar tareas
+  // Reload tasks
   selectedTasks.clear();
   await loadTasks();
   
   btn.disabled = false;
-  btn.textContent = '🗑️ Eliminar seleccionadas';
+  btn.textContent = '🗑️ Delete selected';
 }
 
-async function crearIssue(token,owner,repo,row){
+async function createIssue(token,owner,repo,row){
   const res=await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`,{
     method:'POST',
     headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json'},
@@ -495,120 +504,17 @@ async function addToProject(token,projectId,contentId){
   await ghGraphQL(token, mutation,{project:projectId, content:contentId});
 }
 
-async function suggestRepo() {
-  const token = document.getElementById('token').value.trim();
-  const projectId = document.getElementById('projectSelect').value;
-  
-  if (!token || !projectId) {
-    alert('Primero selecciona un proyecto');
-    return;
-  }
-  
-  const btn = document.getElementById('suggestRepo');
-  btn.disabled = true;
-  btn.textContent = '🔄 Analizando...';
-  
-  try {
-    const query = `query($projectId: ID!) {
-      node(id: $projectId) {
-        ... on ProjectV2 {
-          title
-          items(first: 20) {
-            nodes {
-              content {
-                ... on Issue {
-                  repository {
-                    owner {
-                      login
-                    }
-                    name
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }`;
-    
-    const data = await ghGraphQL(token, query, { projectId });
-    const items = data.node.items.nodes;
-    
-    // Contar repositorios más frecuentes
-    const repoCount = {};
-    items.forEach(item => {
-      if (item.content && item.content.repository) {
-        const repo = item.content.repository;
-        const fullName = `${repo.owner.login}/${repo.name}`;
-        repoCount[fullName] = (repoCount[fullName] || 0) + 1;
-      }
-    });
-    
-    if (Object.keys(repoCount).length === 0) {
-      alert('Este proyecto no tiene issues existentes para sugerir un repositorio.');
-      return;
-    }
-    
-    // Encontrar el repositorio más usado
-    const sortedRepos = Object.entries(repoCount)
-      .sort(([,a], [,b]) => b - a);
-    
-    let message = 'Repositorios encontrados en este proyecto:\n\n';
-    sortedRepos.forEach(([repo, count], index) => {
-      message += `${index + 1}. ${repo} (${count} issues)\n`;
-    });
-    
-    const choice = prompt(message + '\n¿Qué repositorio quieres usar? (escribe el número):');
-    const index = parseInt(choice) - 1;
-    
-    if (index >= 0 && index < sortedRepos.length) {
-      const [ownerRepo] = sortedRepos[index];
-      const repoName = ownerRepo.split('/')[1];
-      
-      // Verificar si el repo está en el dropdown, si no, agregarlo
-      const select = document.getElementById('repo');
-      let optionExists = false;
-      
-      for (let option of select.options) {
-        if (option.value === repoName) {
-          select.value = repoName;
-          optionExists = true;
-          break;
-        }
-      }
-      
-      if (!optionExists) {
-        // Agregar el repositorio sugerido al dropdown
-        const newOption = document.createElement('option');
-        newOption.value = repoName;
-        newOption.textContent = `${repoName} (sugerido desde proyecto)`;
-        newOption.selected = true;
-        select.appendChild(newOption);
-        select.disabled = false;
-      }
-      
-      log(`✅ Repositorio sugerido: ${repoName}`);
-    }
-    
-  } catch (e) {
-    log('Error al sugerir repositorio: ' + e.message);
-  }
-  
-  btn.disabled = false;
-  btn.textContent = '💡 Sugerir desde proyecto';
-}
-
 async function loadRepos() {
   const token = document.getElementById('token').value.trim();
   const owner = document.getElementById('owner').value.trim() || viewerLogin;
   
   if (!token) {
-    alert('Introduce el token primero');
+    alert('Enter the token first');
     return;
   }
   
   if (!owner) {
-    alert('Especifica el owner o carga los proyectos primero para obtener tu usuario');
+    alert('Specify the owner or load projects first to get your username');
     return;
   }
   
@@ -616,13 +522,13 @@ async function loadRepos() {
   const select = document.getElementById('repo');
   
   btn.disabled = true;
-  btn.textContent = 'Cargando...';
+  btn.textContent = 'Loading...';
   select.disabled = true;
   
-  log('Cargando repositorios de ' + owner + '...');
+  log('Loading repositories for ' + owner + '...');
   
   try {
-    // Intentar primero como usuario
+    // Try as user first
     let query = `query($owner: String!) {
       user(login: $owner) {
         repositories(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
@@ -645,7 +551,7 @@ async function loadRepos() {
       data = await ghGraphQL(token, query, { owner });
       if (!data.user) throw new Error('Not a user');
     } catch (userError) {
-      // Intentar como organización
+      // Try as organization
       query = `query($owner: String!) {
         organization(login: $owner) {
           repositories(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
@@ -665,37 +571,37 @@ async function loadRepos() {
       
       data = await ghGraphQL(token, query, { owner });
       if (!data.organization) {
-        throw new Error('Usuario/organización no encontrado');
+        throw new Error('User/organization not found');
       }
     }
     
     const repos = data.user?.repositories?.nodes || data.organization?.repositories?.nodes || [];
     
-    // Filtrar solo repos con issues habilitadas
+    // Filter only repos with issues enabled
     const reposWithIssues = repos.filter(repo => repo.hasIssuesEnabled);
     
     select.innerHTML = '';
     if (reposWithIssues.length === 0) {
-      select.innerHTML = '<option value="">-- No hay repositorios con issues --</option>';
-      log('No se encontraron repositorios con issues habilitadas.');
+      select.innerHTML = '<option value="">-- No repositories with issues --</option>';
+      log('No repositories with issues enabled found.');
     } else {
       reposWithIssues.forEach(repo => {
         const option = document.createElement('option');
         option.value = repo.name;
-        option.textContent = `${repo.name}${repo.isPrivate ? ' 🔒' : ' 🌐'} - ${repo.description || 'Sin descripción'}`;
+        option.textContent = `${repo.name}${repo.isPrivate ? ' 🔒' : ' 🌐'} - ${repo.description || 'No description'}`;
         select.appendChild(option);
       });
       select.disabled = false;
-      log(`Repositorios cargados: ${reposWithIssues.length} (con issues habilitadas)`);
+      log(`Repositories loaded: ${reposWithIssues.length} (with issues enabled)`);
     }
     
   } catch (e) {
-    log('Error al cargar repositorios: ' + e.message);
-    select.innerHTML = '<option value="">-- Error al cargar --</option>';
+    log('Error loading repositories: ' + e.message);
+    select.innerHTML = '<option value="">-- Error loading --</option>';
   }
   
   btn.disabled = false;
-  btn.textContent = 'Cargar repositorios';
+  btn.textContent = 'Load repositories';
 }
 
 // Event Listeners
@@ -706,7 +612,30 @@ document.getElementById('selectAll').addEventListener('click', selectAllTasks);
 document.getElementById('deselectAll').addEventListener('click', deselectAllTasks);
 document.getElementById('deleteSelected').addEventListener('click', deleteSelectedTasks);
 document.getElementById('loadRepos').addEventListener('click', loadRepos);
-document.getElementById('suggestRepo').addEventListener('click', suggestRepo);
+
+// Token validation - enable/disable buttons based on token presence
+document.getElementById('token').addEventListener('input', function() {
+  const hasToken = this.value.trim().length > 0;
+  
+  // Enable/disable import button
+  document.getElementById('run').disabled = !hasToken;
+  
+  // Enable/disable load buttons
+  document.getElementById('loadProjects').disabled = !hasToken;
+  document.getElementById('loadManageProjects').disabled = !hasToken;
+  document.getElementById('loadRepos').disabled = !hasToken;
+  
+  // Update button text to indicate token requirement
+  if (!hasToken) {
+    document.getElementById('loadProjects').textContent = 'Enter token first';
+    document.getElementById('loadManageProjects').textContent = 'Enter token first';
+    document.getElementById('loadRepos').textContent = 'Enter token first';
+  } else {
+    document.getElementById('loadProjects').textContent = 'Load projects';
+    document.getElementById('loadManageProjects').textContent = 'Load projects';
+    document.getElementById('loadRepos').textContent = 'Load repositories';
+  }
+});
 
 document.getElementById('run').addEventListener('click',async ()=>{
   const token=document.getElementById('token').value.trim();
@@ -715,7 +644,7 @@ document.getElementById('run').addEventListener('click',async ()=>{
   const repo=document.getElementById('repo').value.trim();
   const projectId=document.getElementById('projectSelect').value;
   const file=document.getElementById('file').files[0];
-  if(!token||!repo||!projectId||!file||!ownerName){alert('Faltan datos o no se reconoció el owner');return;}
+  if(!token||!repo||!projectId||!file||!ownerName){alert('Missing data or owner not recognized');return;}
   const prog=document.getElementById('prog');
   prog.hidden=false; prog.value=0;
   document.getElementById('log').textContent='';
@@ -723,21 +652,21 @@ document.getElementById('run').addEventListener('click',async ()=>{
   const text=await file.text();
   const rows=parseCSV(text);
   const total=rows.length;
-  log(`Filas encontradas: ${total}\n---`);
+  log(`Rows found: ${total}\n---`);
   let done=0;
   for(const row of rows){
     try{
-      log(`Creando issue: \"${row.title}\"…`);
-      const nodeId=await crearIssue(token,ownerName,repo,row);
-      log('   ✓ Issue creado, añadiendo al Project…');
+      log(`Creating issue: "${row.title}"…`);
+      const nodeId=await createIssue(token,ownerName,repo,row);
+      log('   ✓ Issue created, adding to Project…');
       await addToProject(token,projectId,nodeId);
-      log('   ✓ Añadido');
+      log('   ✓ Added');
     }catch(e){
       log('   ✗ Error: '+e.message);
     }
     done++; prog.value=Math.round((done/total)*100);
   }
-  log('---\nProceso completado.');
+  log('---\nProcess completed.');
 });
 </script>
 </body>
